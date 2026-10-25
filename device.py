@@ -108,3 +108,103 @@ class TeachingDevice(IIdentifiable):
                 f"({self._storage_location}), {self._status.value}{extra}")
 
 
+# ---------------------------------------------------------------
+# Điều khiển máy chiếu
+# ---------------------------------------------------------------
+class ProjectorRemote(TeachingDevice):
+    """Điều khiển máy chiếu: có mức pin 0..100."""
+ 
+    MIN_BATTERY = 20  # Pin tối thiểu để cấp phát
+ 
+    def __init__(self, device_id: str, name: str, storage_location: str,
+                 battery_level: int):
+        super().__init__(device_id, name, storage_location)
+        self._battery_level = _check_percent(battery_level, "BatteryLevel")
+ 
+    @property
+    def battery_level(self) -> int:
+        return self._battery_level
+ 
+    def is_ready_for_use(self) -> bool:
+        # Sẵn sàng khi Available và pin >= 20%
+        return (self._status == DeviceStatus.AVAILABLE
+                and self._battery_level >= self.MIN_BATTERY)
+ 
+    def get_default_priority_score(self) -> float:
+        # Điểm ưu tiên = mức pin
+        return float(self._battery_level)
+ 
+    def _extra_info(self) -> str:
+        return f"pin={self._battery_level}%"
+ 
+ 
+# ---------------------------------------------------------------
+# Điều khiển điều hòa
+# ---------------------------------------------------------------
+class AirConditionerRemote(TeachingDevice):
+    """Điều khiển điều hòa: có tập phòng tương thích."""
+ 
+    def __init__(self, device_id: str, name: str, storage_location: str,
+                 compatible_rooms):
+        super().__init__(device_id, name, storage_location)
+        if compatible_rooms is None:
+            raise ValueError("CompatibleRooms không được None")
+        # frozenset: tập chỉ đọc, bên ngoài không sửa được
+        self._compatible_rooms = frozenset(compatible_rooms)
+ 
+    @property
+    def compatible_rooms(self) -> frozenset:
+        return self._compatible_rooms
+ 
+    def is_compatible_with(self, room_id: str) -> bool:
+        """Điều khiển có tương thích với phòng room_id hay không."""
+        return room_id in self._compatible_rooms
+ 
+    def is_ready_for_use(self) -> bool:
+        # Chỉ cần trạng thái Available
+        return self._status == DeviceStatus.AVAILABLE
+ 
+    def get_default_priority_score(self) -> float:
+        # Không biết phòng cụ thể nên: có hỗ trợ ít nhất một phòng -> 100, ngược lại 0.
+        # (Việc lọc đúng phòng được thực hiện qua điều kiện bổ sung khi Allocate)
+        return 100.0 if self._compatible_rooms else 0.0
+ 
+    def _extra_info(self) -> str:
+        return f"phòng={sorted(self._compatible_rooms)}"
+ 
+ 
+# ---------------------------------------------------------------
+# Micro không dây
+# ---------------------------------------------------------------
+class WirelessMicrophone(TeachingDevice):
+    """Micro không dây: có mức pin và chất lượng tín hiệu (0..100)."""
+ 
+    MIN_BATTERY = 30   # Pin tối thiểu
+    MIN_SIGNAL = 40    # Tín hiệu tối thiểu
+ 
+    def __init__(self, device_id: str, name: str, storage_location: str,
+                 battery_level: int, signal_quality: int):
+        super().__init__(device_id, name, storage_location)
+        self._battery_level = _check_percent(battery_level, "BatteryLevel")
+        self._signal_quality = _check_percent(signal_quality, "SignalQuality")
+ 
+    @property
+    def battery_level(self) -> int:
+        return self._battery_level
+ 
+    @property
+    def signal_quality(self) -> int:
+        return self._signal_quality
+ 
+    def is_ready_for_use(self) -> bool:
+        # Sẵn sàng khi Available, pin >= 30% và tín hiệu >= 40%
+        return (self._status == DeviceStatus.AVAILABLE
+                and self._battery_level >= self.MIN_BATTERY
+                and self._signal_quality >= self.MIN_SIGNAL)
+ 
+    def get_default_priority_score(self) -> float:
+        # Điểm ưu tiên = trung bình của pin và tín hiệu
+        return (self._battery_level + self._signal_quality) / 2
+ 
+    def _extra_info(self) -> str:
+        return f"pin={self._battery_level}%, tín hiệu={self._signal_quality}%"
